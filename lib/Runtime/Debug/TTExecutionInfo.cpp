@@ -603,7 +603,7 @@ namespace TTD
             this->m_lastReturnLocation.SetExceptionLocation(this->m_callStack.Last());
         }
 
-        if(!m_lastExceptionPropagating)
+        if(!this->m_lastExceptionPropagating)
         {
             this->m_lastExceptionLocation.SetLocationFromFrame(this->m_topLevelCallbackEventTime, this->m_callStack.Last());
             this->m_lastExceptionPropagating = true;
@@ -896,7 +896,8 @@ namespace TTD
                 //we moved to a new statement
                 Js::FunctionBody::StatementMap* pstmt = fb->GetStatementMaps()->Item(cIndex);
                 bool newstmt = (cIndex != cfinfo.CurrentStatementIndex && pstmt->byteCodeSpan.begin <= (int)bytecodeOffset && (int)bytecodeOffset <= pstmt->byteCodeSpan.end);
-                if (newstmt)
+                bool startUnaligend = (cfinfo.CurrentStatementIndex == -1) && (pstmt->byteCodeSpan.begin != (int)bytecodeOffset); //make sure async step back is ok
+                if (newstmt && !startUnaligend)
                 {
                     cfinfo.LastStatementIndex = cfinfo.CurrentStatementIndex;
                     cfinfo.LastStatementLoopTime = cfinfo.CurrentStatementLoopTime;
@@ -997,9 +998,15 @@ namespace TTD
         {
             SingleCallCounter cfinfoCaller = { 0 };
             bool hasCaller = this->TryGetTopCallCallerCounter(cfinfoCaller);
+            if (hasCaller)
+            {
+                ftime = cfinfoCaller.FunctionTime;
+                ltime = cfinfoCaller.CurrentStatementLoopTime;
 
-            //check if we are at the first statement in the callback event
-            if(!hasCaller)
+                fbody = cfinfoCaller.Function;
+                statementIndex = cfinfoCaller.CurrentStatementIndex;
+            }
+            else
             {
                 //Set the position info to the current statement and return true
                 noPrevious = true;
@@ -1009,6 +1016,12 @@ namespace TTD
 
                 fbody = cfinfo.Function;
                 statementIndex = cfinfo.CurrentStatementIndex;
+            }
+
+            //check if we are at the first statement in the callback event
+            if(!hasCaller)
+            {
+                
             }
             else
             {
@@ -1041,6 +1054,7 @@ namespace TTD
     void ExecutionInfoManager::GetLastExecutedTimeAndPositionForDebugger(TTDebuggerSourceLocation& sourceLocation) const
     {
         const TTLastReturnLocationInfo& cframe = this->m_lastReturnLocation;
+
         if(!cframe.IsDefined())
         {
             sourceLocation.Clear();
